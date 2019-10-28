@@ -1,8 +1,7 @@
 package controller;
 
 import entities.*;
-import ui.labels.CountryObsLabel;
-
+import ui.Trade;
 import java.awt.Color;
 import java.io.BufferedReader;
 import java.io.File;
@@ -14,13 +13,14 @@ import java.util.HashSet;
 import java.util.Observer;
 import java.util.Vector;
 
-import javax.imageio.ImageIO;
+import javax.swing.JTextField;
 
 import java.util.Date;
 import java.text.SimpleDateFormat;
 
 
 public class Controller {
+	
 	GamePlay game;
 	Vector <String> files_load = new Vector <String>();
 	String map_file_name = "";
@@ -152,8 +152,8 @@ public class Controller {
 				}
 				line = br.readLine();
 			}
-			this.game.setContinents(continents_list);
-			this.game.setCountries(countries_list);
+			game.setContinents(continents_list);
+			game.setCountries(countries_list);
 			br.close();
 			map_file_name = address;
 			return true;
@@ -184,7 +184,7 @@ public class Controller {
 				for(int i = 0;i<p.getOwnCard().size();i++) {
 					out.write(p.getOwnCard().get(i).getType().substring(0,1));	
 				}
-				out.write("} "+p.getArmyToPlace()+"\r\n");
+				out.write("} "+p.getArmyToPlace()+" "+p.getTradeTimes()+"\r\n");
 			}
 			out.write("\r\n[countries]\r\n");
 			for(Country c:game.getCountries()) {
@@ -193,17 +193,24 @@ public class Controller {
 			out.write("\r\n[status]\r\n");
 			out.write(game.getPlayerIndex()+" ");
 			if(game.getPhase().equals("Startup Phase")) {
-				out.write("0");
+				out.write("0 ");
 			}
 			else if(game.getPhase().equals("Reinforcement Phase")) {
-				out.write("1");
+				out.write("1 ");
 			}
-			else if(game.getPhase().equals("Attack Phase")) {
-				out.write("2");
+			else if(game.getPhase().equals("Attack Phase 1")) {
+				out.write("2 ");
+			}
+			else if(game.getPhase().equals("Attack Phase 2")) {
+				out.write("3 ");
+			}
+			else if(game.getPhase().equals("Attack Phase 3")) {
+				out.write("4 ");
 			}
 			else if(game.getPhase().equals("Fortification Phase")) {
-				out.write("3");
+				out.write("5 ");
 			}
+			out.write(Integer.toString(game.getAddFlag()));
 			out.flush();
 			out.close();
 		} catch (IOException e) {
@@ -215,7 +222,7 @@ public class Controller {
 	public boolean loadFile(String name) {
 		loaded_game = true;
 		Vector<Player> players = new Vector<>();
-
+		
 		try {
 			String pathname = "save\\"+name+".save";
 			File filename = new File(pathname);
@@ -246,6 +253,7 @@ public class Controller {
 					p.addCard(cardType(String.valueOf(split[3].charAt(i))));
 				}
 				p.setArmyToPlace(Integer.parseInt(split[4]));
+				p.setTradeTimes(Integer.parseInt(split[5]));
 				line = br.readLine();
 			}
 			game.setPlayers(players);
@@ -269,17 +277,26 @@ public class Controller {
 			}while(!line.trim().equals("[status]"));
 			line = br.readLine();
 			String[] split = line.split("\\s+");
-			game.setPlayerIndex(Integer.parseInt(split[0]));
-			game.setPhase(split[1]);
-			line = br.readLine();
-			
-		}catch(IOException e) {
+			if(Integer.parseInt(split[0])>=game.getPlayers().size()||Integer.parseInt(split[1])>5) {
+				game.clearData();
+				br.close();
+				return false;
+			}
+			else {
+				game.setPlayerIndex(Integer.parseInt(split[0]));
+				game.setPhase(split[1]);
+				game.setAddFlag(Integer.parseInt(split[2]));
+				line = br.readLine();
+				br.close();
+				for(Continent c:game.getContinents()) {
+					c.checkIfConquered();
+				}
+				return true;
+			}
+		}catch(Exception e) {
 			e.printStackTrace();
 			return false;
-		}
-		
-		
-		return true;
+		}	
 	}
 	
 	private String cardType(String c) {
@@ -408,11 +425,143 @@ public class Controller {
 	        	return new String [] {"F","Not in Reinforcement Phase!"};
 			}
 		}
+		
+		//Command -noattack
+		else if(splitted[0].equals("-noattack")) {
+			if (game.getPhase().equals("Attack Phase 1")) {
+				game.noAttack();
+			}
+			else {
+	        	return new String [] {"F","Not in Attack Phase 1!"};
+			}
+		}
+		
+		//Command attack fromcountry tocountry numdice -allout -noattack
+		else if(splitted[0].equals("attack")) {
+			if (game.getPhase().equals("Attack Phase 1")) {
+				String fromCountry = splitted[1];
+				String toCountry = splitted[2];			
+				boolean f_exists = false;
+				boolean t_exists = false;
+				Country tempFrom = new Country();
+				Country tempTo = new Country();
+				for (Country c: game.getCountries()) {
+					if (c.getName().equals(fromCountry)) {
+						f_exists = true;
+						tempFrom = c;
+						break;
+					}
+				}
+				for (Country c: game.getCountries()) {
+					if (c.getName().equals(toCountry)) {
+						t_exists = true;
+						tempTo = c;
+						break;
+					}
+				}
+				
+				//if both countries exist
+				if(f_exists && t_exists) {
+					//if the attacking country belongs to the current player
+					if(tempFrom.getOwner().getID().equals(game.getPlayer().getID())) {
+						//if the countries are not owned by the same player
+						if(!tempFrom.getOwner().getID().equals(tempTo.getOwner().getID())) {
+							//if the countries are neighbors
+							if(tempFrom.hasNeighbour(toCountry)) {
+								//if attacking country has at least 2 army count
+								if(tempFrom.getArmyNum()>=2) {
+									//if player is going all out on the attack
+									if(splitted[3].equals("-allout")) {
+										if(game.allOutAttack(tempFrom, tempTo)) {
+								        	return new String [] {"S","Country successfully conquered, Move army to conquered city!"};
+										}
+									}
+									//if the player is only attacking once
+									else {
+										int number = Integer.parseInt(splitted[3]);
+										//if number of dice does not exceed attacking army (country army -1)
+										if(!(number > tempFrom.getArmyNum()-1)) {
+											//if only want to attack once
+											game.setAttack (tempFrom, tempTo, number);
+										}
+										else {
+								        	return new String [] {"F","Number of dice exceeds limit!"};
+										}
+									}
+								}
+								else {
+						        	return new String [] {"F","Must have at least 2 armies to attack!"};
+								}
+							}
+							else {
+					        	return new String [] {"F", fromCountry+" does not neighbor "+toCountry+"!"};
+							}
+						}
+						else {
+				        	return new String [] {"F","Countries owned by the same player!"};
+						}
+					}
+					else {
+			        	return new String [] {"F",fromCountry+" does not belong to player "+game.getPlayerID()+"!"};
+					}
+				}
+				else {
+		        	return new String [] {"F","Country(ies)"+ (f_exists?"":splitted[1])+
+							(t_exists?"":splitted[2])+" do(es)'nt exist!"};
+				}
+				
+			}
+			else {
+	        	return new String [] {"F","Not in Attack Phase 1!"};
+			}
+		}
+		
+		//Command defend numdice
+		else if(splitted[0].equals("defend")) {
+			if (game.getPhase().equals("Attack Phase 2")) {
+				int num = Integer.parseInt(splitted[1]);
+				if(game.getDefender().getArmyNum() >= num) {
+					if(game.commenceAttack(num)) {
+						return new String [] {"S","Country successfully conquered, Move army to conquered city!"};
+					}
+				}
+				else {
+		        	return new String [] {"F","Number of dice exceeds maximum number defender army!"};
+
+				}
+			}
+			else {
+	        	return new String [] {"F","Not in Attack Phase 2!"};
+			}
+
+		}
+		
+		//Command attackmove num
+		else if (splitted[0].equals("attackmove")) {
+			if(game.getPhase().equals("Attack Phase 3")) {
+				int numToSend = Integer.parseInt(splitted[1]);
+				if(numToSend < game.getAttacker().getArmyNum()) {
+					if(numToSend >= game.getAttackDice()||numToSend==game.getAttacker().getArmyNum()-1) {
+						game.moveArmyTo(numToSend);
+						game.reSetOwner();
+					}
+					else {
+						return new String[] {"F","Number of the army to send must equal or greater than attack dice"};
+					}
+				}else {
+					return new String[] {"F","Number of the army to send cannot be great or equal than the army you own"};
+				}
+			}
+			else {
+	        	return new String [] {"F","Not in Attack Phase 3!"};
+			}
+		}
+		
 		//Command fortify none
 		//Command fortify fromcountry tocountry num
 		else if(splitted[0].equals("fortify")) {
 			if (game.getPhase().equals("Fortification Phase")) {
-				if(splitted[1].equals("none")){
+				if(splitted[1].equals("-none")){
 					game.nextPlayer();
 				}
 				else {
@@ -467,29 +616,49 @@ public class Controller {
 	        	return new String [] {"F","Not in Fortification Phase!"};
 			}
 		}
-			return new String [] {"S"};
+		else if(splitted[0].equals("cheat")) {
+			if(game.getPhase().equals("Reinforcement Phase")) {
+				game.addCard();	
+				refresh();
+			}
+			else {
+				return new String [] {"F","Not in Reinforcement Phase!"};
+			}
+		}
+		else if(splitted[0].equals("trade")) {
+			if(game.getPhase().equals("Reinforcement Phase")) {
+				Trade t = new Trade(game);
+				t.setVisible(true);
+			}
+			else {
+				return new String [] {"F","Not in Reinforcement Phase!"};
+			}
+		}
+		return new String [] {"S"};
 	}
 	
 	public void refresh() {
-		for(Country cl: countries_list) {
+		for(Country cl:countries_list) {
 			cl.alertObservers();
 		}
-		game.alertObservers(1);
+		game.alertObservers();
 	}
 	
 	public boolean loadedGame() {
-		return this.loaded_game;
+		return loaded_game;
 	}
 	
 	public Vector<Country> getCountries() {
-		return this.countries_list;
+		return countries_list;
 	}
 	
 
 	public Vector<String> getFilesLoad() {
-		return this.files_load;
+		return files_load;
 	}
 	
-	
+	public GamePlay getGame() {
+		return game;
+	}
 	
 }

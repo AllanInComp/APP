@@ -10,6 +10,7 @@ public class Player {
 	private Vector<Card> ownedCard = new Vector<Card>(); 
 	private Color color;
 	private int army_to_place;
+	private int trade_times;
 	
 	/**
 	 * Empty constructor for Player
@@ -18,6 +19,7 @@ public class Player {
 	public Player () {
 		this.id = "DNE";
 	}
+	
 	
 	/**
 	 * Proper constructor for Player
@@ -30,6 +32,7 @@ public class Player {
 		this.color = color;
 		this.ownedContinent = new Vector<>();
 		this.army_to_place = 0;
+		this.trade_times = 0;
 	}
 	
 	/**
@@ -38,11 +41,11 @@ public class Player {
 	 * @return rew number of armies to place as int
 	 */
 	public int calculateArmy() {
-        int rew = total_country_number/3;
-        if(rew<3) {
-            rew=3;
+        int raw = total_country_number/3;
+        if(raw<3) {
+            raw=3;
         }
-        return rew;
+        return raw;
     }
 	
 	/**
@@ -79,6 +82,9 @@ public class Player {
 		this.army_to_place += calculateArmy() + extraArmyToAdd();
 	}
 	
+	public void reSetArmy() {
+		army_to_place = 0;
+	}
 	
 	
 	/**
@@ -93,11 +99,11 @@ public class Player {
 	 * When the player successfully conquers a new country, increment the totalaCountryNum this player has
 	 */
 	public void increaseCountry () {
-		this.total_country_number++;
+		total_country_number++;
 	}
 	
 	public void increaseCountry(int i) {
-		this.total_country_number+=i;
+		total_country_number+=i;
 	}
 	
 	/**
@@ -106,8 +112,8 @@ public class Player {
 	 * @return true if player lost, false if player still has at least 1 country remaining
 	 */
 	public boolean decreaseCountry()  {
-		this.total_country_number--;
-		if (this.total_country_number >0 ) return false;
+		total_country_number--;
+		if (total_country_number >0 ) return false;
 		return true;
 	}
 	
@@ -188,7 +194,7 @@ public class Player {
 	 * @return number
 	 */
 	public int getTotalCountriesNumber() {
-		return this.total_country_number;
+		return total_country_number;
 	}
 	
 	/**
@@ -230,5 +236,17 @@ public class Player {
 	 */
 	public int getArmyToPlace() {
 		return this.army_to_place;
+	}
+	
+	public void addTradeTimes() {
+		trade_times++;
+	}
+	
+	public int getTradeTimes() {
+		return trade_times;
+	}
+	
+	public void setTradeTimes(int t) {
+		trade_times = t;
 	}
 }
